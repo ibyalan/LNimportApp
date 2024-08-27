@@ -1,0 +1,6 @@
+﻿CUSTOMER,,,,,
+firstname,lastname,email,companyname,comments,isperson
+Nisha,Jose,nishajose@yahoo.com,,importLN,T
+,,joby@connectors.com,Connectors,importLN,F
+,,joly@gx.com,Macys,importLN,F
+Shiney,Jose,shineyjose@yahoo.com,,importLN,T

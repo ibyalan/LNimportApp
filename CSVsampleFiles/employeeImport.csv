@@ -1,0 +1,4 @@
+﻿employee,,,,,,
+firstname,lastname,email,companyname,comments,isperson,subsidiary
+Nisha,Jose,nishajose@yahoo.com,,importLN,T,11
+,,joby@connectors.com,Connectors,importLN,F,11

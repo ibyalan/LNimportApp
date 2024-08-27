@@ -1,0 +1,6 @@
+﻿salesorder,,,,,,,,
+externalid,lineid,sublistid,entity,item,quantity,rate,memo,subsidiary
+SO_8-24_1,,,2880,,,,importLN,11
+SO_8-24_1,1,item,2880,2305,2,,importLN,11
+SO_8-24_1,2,item,2880,2305,1,,importLN,11
+SO_8-24_1,3,item,2880,2305,1,,,11
