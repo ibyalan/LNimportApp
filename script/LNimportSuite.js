@@ -32,7 +32,7 @@ define(['N/ui/serverWidget', 'N/file', 'N/record', 'N/log', 'N/task', 'N/runtime
                     details: 'CSV successfully parsed.'
                 });
                 //if there are many records to import, schedule the map reduce
-                if (CSVarr && CSVarr.length > 4) {
+                if (CSVarr && CSVarr.length > 3) {
                     scheduleImport(fileId,
                         context.request.parameters.notes);
                     let form = ui.createForm({
