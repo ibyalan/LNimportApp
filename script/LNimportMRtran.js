@@ -58,7 +58,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                     data.push({ recordType: recordType, fieldNames: fieldNames, recordData: recordData });
                 }
             }
-            //log.debug('getInputData data', JSON.stringify(data));
+            log.debug('getInputData data', JSON.stringify(data));
             return data;
         }
         /**
@@ -69,14 +69,25 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
          * @returns Object
          */
         function map(context) {
-            var value = JSON.parse(context.value);
-            //var key = value.fieldNames[0];
-            //var key = value.recordData[0];//externalid
-            var key = value.recordData[0].externalid;//externalid
-            //todo enforce keep externalid as the first column
-            //todo make the key as the external id; now it is the first field name
-            log.debug('key: ',key);
-            log.debug('value: ',JSON.stringify(value));
+            //Alan todo enforce keep externalid as the first column
+            const data = JSON.parse(context.value);
+            const recordType = data.recordType;
+            var recordData = data.recordData;
+            var rec = record.create({ type: recordType });
+            var key='';
+            var value=[];
+            for (var fieldName in recordData) {
+                var fieldValueObj={}
+                if (recordData.hasOwnProperty(fieldName)) {
+                    if(fieldName == 'externalid')
+                        key = recordData[fieldName];
+                    fieldValueObj.fieldName = fieldName;
+                    fieldValueObj.fieldValue =  recordData[fieldName];
+                    value.push(fieldValueObj)
+                }
+            }
+            log.debug('map key: ',key);
+            log.debug('map value: ',JSON.stringify(value));
             context.write({
                 key: key,
                 value: JSON.stringify(value)
@@ -84,9 +95,9 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
         }
         function reduce(context) {
             var externalIdKey = context.key;
-            log.audit('externalIdKey:', externalIdKey);
-            log.debug('context.value', JSON.stringify(context.value));
-            log.debug('context.values', JSON.stringify(context.values));
+            log.audit('reduce externalIdKey:', externalIdKey);
+            log.debug('reduce context.value', JSON.stringify(context.value));
+            log.debug('reduce context.values', JSON.stringify(context.values));
 
             const data = JSON.parse(context.value);
             // log.debug('json data: ',JSON.stringify(data));
