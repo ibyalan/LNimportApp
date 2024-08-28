@@ -112,7 +112,10 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                     });
                 }
             }
-            //todo get the line fields where the lineid column has a value
+            //todo Alan check the fieldname and set the value accordingly text/list/checkbox...
+            //add address fields
+            //get the line fields where the lineid column has a value and set sublist fields
+            //group all lines for an externalid and create the transaction
             const tranLines = [];
             tranLines.forEach(line => {
     
