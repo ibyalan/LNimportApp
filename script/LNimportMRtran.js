@@ -18,7 +18,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                 return null;
             log.debug({
                 title: 'LNimportMR',
-                details: 'getInputData scriptParams: '+ JSON.stringify(scriptParams)
+                details: 'getInputData scriptParams: ' + JSON.stringify(scriptParams)
             });
             if (!scriptParams.fileId) {
                 throw error.create({
@@ -45,7 +45,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             }
             log.debug('recordType', recordType);
             var fieldNames = CSVarr[1];
-            var row='';
+            var row = '';
             var data = [];
             for (let i = 2; i < CSVarr.length; i++) {
                 row = CSVarr[i];
@@ -74,26 +74,126 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             const recordType = data.recordType;
             var recordData = data.recordData;
             var rec = record.create({ type: recordType });
-            var key='';
-            var value=[];
+            var key = '';
+            var value = [];
             for (var fieldName in recordData) {
-                var fieldValueObj={}
+                var fieldValueObj = {}
                 if (recordData.hasOwnProperty(fieldName)) {
-                    if(fieldName == 'externalid')
+                    if (fieldName == 'externalid')
                         key = recordData[fieldName];
                     fieldValueObj.fieldName = fieldName;
-                    fieldValueObj.fieldValue =  recordData[fieldName];
+                    fieldValueObj.fieldValue = recordData[fieldName];
                     value.push(fieldValueObj)
                 }
             }
-            log.debug('map key: ',key);
-            log.debug('map value: ',JSON.stringify(value));
+            log.debug('map key: ', key);
+            log.debug('map value: ', JSON.stringify(value));
             context.write({
                 key: key,
                 value: JSON.stringify(value)
             });
         }
         function reduce(context) {
+            const data = JSON.parse(context.value);
+            // log.debug('json data: ',JSON.stringify(data));
+            var recordType = data.recordType;
+            var headerData = null;
+            var itemDataArray = []; // Array to store item data
+            // Loop through context.values to distinguish header and line data
+            context.values.forEach(function (value) {
+                var parsedData = JSON.parse(value);
+
+                if (!parsedData.lineid) {
+                    // If lineid is empty, treat this as the header data
+                    headerData = parsedData;
+                } else {
+                    // Otherwise, treat this as item line data
+                    itemDataArray.push(parsedData);
+                }
+            });
+
+            // Ensure that header data is available before creating the Sales Order
+            if (!headerData) {
+                log.error({
+                    title: 'Missing Header Data',
+                    details: 'No header data found for record creation'
+                });
+                return;
+            }
+
+            try {
+                // Create a new Sales Order record
+                var rec = record.create({ type: recordType, isDynamic: true });
+
+                // Set the customer and other header-level fields on the sales order
+                rec.setValue({
+                    fieldId: 'entity',
+                    value: headerData.customerId // Assuming customerId is part of the headerData
+                });
+
+                // Set other header fields (memo, location, etc.)
+                if (headerData.memo) {
+                    rec.setValue({
+                        fieldId: 'memo',
+                        value: headerData.memo
+                    });
+                }
+
+                if (headerData.location) {
+                    rec.setValue({
+                        fieldId: 'location',
+                        value: headerData.location
+                    });
+                }
+
+                // Loop through the itemDataArray to add item lines to the sales order
+                itemDataArray.forEach(function (itemData) {
+                    rec.selectNewLine({
+                        sublistId: 'item'
+                    });
+
+                    rec.setCurrentSublistValue({
+                        sublistId: 'item',
+                        fieldId: 'item',
+                        value: itemData.itemId // Set the item ID
+                    });
+
+                    rec.setCurrentSublistValue({
+                        sublistId: 'item',
+                        fieldId: 'quantity',
+                        value: itemData.quantity // Set the quantity
+                    });
+
+                    rec.setCurrentSublistValue({
+                        sublistId: 'item',
+                        fieldId: 'rate',
+                        value: itemData.rate // Set the rate/price
+                    });
+
+                    // Commit the line after setting all item details
+                    rec.commitLine({
+                        sublistId: 'item'
+                    });
+                });
+
+                // Save the sales order
+                var salesOrderId = rec.save({
+                    enableSourcing: true,
+                    ignoreMandatoryFields: false
+                });
+
+                log.audit('Sales Order Created', 'Sales Order ID: ' + salesOrderId);
+
+            } catch (e) {
+                log.error({
+                    title: 'Error creating Sales Order',
+                    details: e.message
+                });
+            }
+        }
+
+        /////
+        function reducex(context) {
             var externalIdKey = context.key;
             log.audit('reduce externalIdKey:', externalIdKey);
             log.debug('reduce context.value', JSON.stringify(context.value));
@@ -118,7 +218,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             //group all lines for an externalid and create the transaction
             const tranLines = [];
             tranLines.forEach(line => {
-    
+
                 if (!errorRecordId) {
                     errorRecordId = line.values[1]; // id
                 }
@@ -129,7 +229,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                 rec.setCurrentSublistValue({
                     sublistId: 'item',
                     fieldId: 'item',
-                    value: line.values[8] 
+                    value: line.values[8]
                 });
                 rec.commitLine({ sublistId: 'taxdetails' });
             });
@@ -139,13 +239,13 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             });
             log.debug({
                 title: 'reduce',
-                details: 'recordId: '+ recordId
+                details: 'recordId: ' + recordId
             });
             context.write({
                 key: recordId,
                 value: 'Success'
             });
-            
+
             // context.write({
             //     key: externalIdKey,
             //     value: JSON.stringify({
@@ -153,8 +253,8 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             //         status: 'Success'
             //     })
             // });
-    
-        }    
+
+        }
         function mapold(context) {
             const data = JSON.parse(context.value);
             const recordType = data.recordType;
@@ -174,7 +274,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             });
             log.debug({
                 title: 'map',
-                details: 'recordId: '+ recordId
+                details: 'recordId: ' + recordId
             });
             context.write({
                 key: recordId,
@@ -197,16 +297,16 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             //move the file to the processed folder
             var script = runtime.getCurrentScript();
             var csvFileId = script.getParameter({ name: 'custscript_file_id_ln' });
-            var processedFolderId = script.getParameter({ name: 'custscript_processed_folder_id_ln' }); 
+            var processedFolderId = script.getParameter({ name: 'custscript_processed_folder_id_ln' });
             if (!processedFolderId) {
                 log.error('Missing Parameter', 'Processed folder ID is missing.');
                 return;
             }
             //try {
-                var inputFile = file.load({ id: csvFileId });
-                inputFile.folder = processedFolderId; // Set the new folder ID
-                inputFile.save(); // Save the file to move it
-                log.audit('File Moved', 'File ID: ' + csvFileId + ' moved to folder ID: ' + processedFolderId);
+            var inputFile = file.load({ id: csvFileId });
+            inputFile.folder = processedFolderId; // Set the new folder ID
+            inputFile.save(); // Save the file to move it
+            log.audit('File Moved', 'File ID: ' + csvFileId + ' moved to folder ID: ' + processedFolderId);
             // } catch (e) {
             //     log.error('Error Moving File', 'File ID: ' + csvFileId + ', Error: ' + e.message);
             // }
@@ -230,11 +330,11 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             });
             log.audit({
                 title: 'LN Import Summary',
-                details: 'LN Import process complete. There were ' 
-                    + failureCount + ' failures and '+succeessCount 
-                    +' successful documents out of '+processedCount
-                    +'  processed. Failed internal ids: '+JSON.stringify(logs.errors)
-                    +'. Processed internal ids: '+JSON.stringify(logs.processed) +'.'
+                details: 'LN Import process complete. There were '
+                    + failureCount + ' failures and ' + succeessCount
+                    + ' successful documents out of ' + processedCount
+                    + '  processed. Failed internal ids: ' + JSON.stringify(logs.errors)
+                    + '. Processed internal ids: ' + JSON.stringify(logs.processed) + '.'
             });
         }
         /**
@@ -256,13 +356,11 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
          * @param context
          * @returns 
          */
-        function handleErrorIfAny(summary)
-        {
+        function handleErrorIfAny(summary) {
             let inputSummary = summary.inputSummary;
             let mapSummary = summary.mapSummary;
             let reduceSummary = summary.reduceSummary;
-            if (inputSummary.error)
-            {
+            if (inputSummary.error) {
                 let e = error.create({
                     name: 'INPUT_STAGE_FAILED',
                     message: inputSummary.error
@@ -273,9 +371,9 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                 });
                 return true;
             }
-            if(handleErrorInStage('map', mapSummary))
+            if (handleErrorInStage('map', mapSummary))
                 return true;
-            if(handleErrorInStage('reduce', reduceSummary))
+            if (handleErrorInStage('reduce', reduceSummary))
                 return true;
         }
         /**
@@ -284,16 +382,14 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
          * @param context
          * @returns boolean
          */
-        function handleErrorInStage(stage, summary)
-        {
+        function handleErrorInStage(stage, summary) {
             let errorMsg = [];
-            summary.errors.iterator().each(function(key, value){
+            summary.errors.iterator().each(function (key, value) {
                 let msg = 'LN Import Error for: ' + key + '. Error was: ' + JSON.parse(value).message + '\n';
                 errorMsg.push(msg);
                 return true;
             });
-            if (errorMsg.length > 0)
-            {
+            if (errorMsg.length > 0) {
                 let e = error.create({
                     name: 'LN_Import_Error',
                     message: JSON.stringify(errorMsg)
@@ -315,7 +411,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                 for (let fieldIdx = 0; fieldIdsArr && fieldIdx < fieldIdsArr.length; fieldIdx++) {
                     let fieldId = fieldIdsArr[fieldIdx];
                     let fieldValue = fieldValuesArr[fieldIdx];
-                    log.debug('fieldId: '+fieldId +' fieldValue: '+fieldValue);
+                    log.debug('fieldId: ' + fieldId + ' fieldValue: ' + fieldValue);
                     if (fieldValue)
                         importRecord.setValue({
                             fieldId: fieldId,
@@ -335,7 +431,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
                 if (e)
                     log.error({
                         title: 'LNimportMR',
-                        details: 'Add record error '+ errorDetails
+                        details: 'Add record error ' + errorDetails
                     });
                 if (e && e.message) {
                     if (e.message.indexOf("already exists") >= 0) {
@@ -357,7 +453,7 @@ define(['N/error', 'N/task', 'N/runtime', 'N/file', 'N/search', 'N/record', 'N/l
             getInputData: getInputData,
             map: map,
             reduce: reduce,
-            summarize: summarize, 
+            summarize: summarize,
             handleErrorIfAny: handleErrorIfAny,
             handleErrorInStage: handleErrorInStage
         };
